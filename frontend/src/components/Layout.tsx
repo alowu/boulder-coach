@@ -15,6 +15,7 @@ const NAV: Record<Role, NavItem[]> = {
   coach: [
     { to: '/scan', label: 'Скан' },
     { to: '/athletes', label: 'Спортсмены' },
+    { to: '/routes', label: 'Трассы' },
     { to: '/coach-stats', label: 'Статистика' },
     { to: '/settings', label: 'Настройки' },
   ],
@@ -22,6 +23,7 @@ const NAV: Record<Role, NavItem[]> = {
     { to: '/admin/overview', label: 'Обзор' },
     { to: '/admin/coaches', label: 'Тренеры' },
     { to: '/admin/users', label: 'Пользователи' },
+    { to: '/routes', label: 'Трассы' },
   ],
 }
 

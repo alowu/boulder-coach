@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { PaymentDue, MyStats, Visit, VisitType, Role } from './types'
+import type { PaymentDue, MyStats, Visit, VisitType, Role, Route, RouteStatus } from './types'
 
 // ── RPC-обёртки (бизнес-логика и контроль доступа — в БД) ──────────────────
 
@@ -69,4 +69,45 @@ export async function myStats(): Promise<MyStats | null> {
 export async function setRole(userId: string, role: Role): Promise<void> {
   const { error } = await supabase.rpc('app_set_role', { p_user: userId, p_role: role })
   if (error) throw error
+}
+
+// Удаление пользователя админом (Edge Function delete-user, service_role).
+export async function deleteUser(userId: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('delete-user', { body: { userId } })
+  if (error) throw error
+}
+
+// ── Фаза 2: трассы ──────────────────────────────────────────────────────────
+export async function listRoutes(): Promise<Route[]> {
+  const { data, error } = await supabase.from('routes').select('*')
+    .eq('is_active', true).order('plane', { ascending: true })
+  if (error) throw error
+  return (data as Route[]) ?? []
+}
+
+export async function createRoute(r: {
+  wall_color?: string | null; grade_french?: string | null; hold_color?: string | null; plane: string
+}): Promise<void> {
+  const { error } = await supabase.from('routes').insert(r)
+  if (error) throw error
+}
+
+export async function logClimb(
+  visitId: string, routeId: string, athleteId: string, status: RouteStatus,
+): Promise<void> {
+  const { error } = await supabase.from('route_logs')
+    .insert({ visit_id: visitId, route_id: routeId, athlete_id: athleteId, status })
+  if (error) throw error
+}
+
+// route_logs со встроенным грейдом — для статистики по грейдам
+export async function myClimbs(athleteId: string): Promise<Array<{ status: RouteStatus; grade: string | null }>> {
+  const { data, error } = await supabase.from('route_logs')
+    .select('status, routes(grade_french)')
+    .eq('athlete_id', athleteId)
+  if (error) throw error
+  return ((data as any[]) ?? []).map((r) => ({
+    status: r.status as RouteStatus,
+    grade: (r.routes?.grade_french ?? null) as string | null,
+  }))
 }

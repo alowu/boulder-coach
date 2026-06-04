@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { setRole } from '../../lib/api'
+import { useAuth } from '../../auth/auth'
+import { setRole, deleteUser } from '../../lib/api'
 import type { Role, Visit } from '../../lib/types'
 import { aggregateVisits, type VisitStats } from '../../lib/stats'
 import { StatCards } from '../../components/StatCards'
@@ -26,12 +27,20 @@ function useUsers() {
 
 export function AdminUsers() {
   const { rows, loading, reload } = useUsers()
+  const { userId: myId } = useAuth()
   const [msg, setMsg] = useState('')
+  const [confirmId, setConfirmId] = useState<string | null>(null)
 
   async function change(id: string, role: Role) {
     setMsg('')
     try { await setRole(id, role); await reload() }
     catch (e) { setMsg((e as Error).message) }
+  }
+
+  async function del(id: string) {
+    setMsg('')
+    try { await deleteUser(id); setConfirmId(null); await reload() }
+    catch (e) { setMsg('Не удалось удалить (разверните Edge Function «delete-user»). ' + (e as Error).message) }
   }
 
   if (loading) return <Spinner />
@@ -42,16 +51,31 @@ export function AdminUsers() {
       <ul className="space-y-2">
         {rows.map((u) => (
           <li key={u.id}>
-            <Card className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate font-medium">{u.display_name ?? '—'}</div>
-                <div className="truncate text-xs text-slate-500">{u.email}</div>
+            <Card>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{u.display_name ?? '—'}</div>
+                  <div className="truncate text-xs text-slate-500">{u.email}</div>
+                </div>
+                <Select value={u.role} onChange={(e) => void change(u.id, e.target.value as Role)} className="w-36">
+                  <option value="athlete">спортсмен</option>
+                  <option value="coach">тренер</option>
+                  <option value="admin">админ</option>
+                </Select>
               </div>
-              <Select value={u.role} onChange={(e) => void change(u.id, e.target.value as Role)} className="w-36">
-                <option value="athlete">спортсмен</option>
-                <option value="coach">тренер</option>
-                <option value="admin">админ</option>
-              </Select>
+              {u.id !== myId && (
+                <div className="mt-2 flex justify-end">
+                  {confirmId === u.id ? (
+                    <span className="flex items-center gap-2 text-sm text-slate-600">
+                      Удалить навсегда?
+                      <Button variant="danger" onClick={() => void del(u.id)}>Да</Button>
+                      <Button variant="ghost" onClick={() => setConfirmId(null)}>Нет</Button>
+                    </span>
+                  ) : (
+                    <Button variant="ghost" onClick={() => setConfirmId(u.id)}>Удалить</Button>
+                  )}
+                </div>
+              )}
             </Card>
           </li>
         ))}

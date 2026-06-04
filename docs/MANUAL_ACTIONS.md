@@ -79,8 +79,38 @@ npm run dev          # откроется http://localhost:5173
 3. Убедитесь, что в URL Configuration добавлен redirect `https://boulder-coach.pages.dev/**`
    (письмо-инвайт ведёт на `/set-password`).
 > Без этого шага тренеров всё равно можно добавлять: пользователь регистрируется сам →
-> вы меняете ему роль на вкладке «Пользователи». Письма Supabase на free-tier лимитированы
-> (несколько в час) — для своего SMTP настройте Auth → SMTP.
+> вы меняете ему роль на вкладке «Пользователи».
+
+## 6c. ✉️ Свой SMTP — ОБЯЗАТЕЛЬНО (встроенная почта Supabase ≈ 3–4 письма/сутки)
+Встроенный отправитель Supabase годится только для теста. С включённым подтверждением
+e-mail и инвайтами он быстро упирается в лимит. Подключите бесплатный SMTP-провайдер.
+
+**Рекомендация: Brevo (бесплатно 300 писем/сутки, БЕЗ своего домена).**
+1. Регистрация на https://www.brevo.com (бесплатно).
+2. **Senders & IP → Senders → Add a sender**: укажите свой e-mail (напр. ilya28122010.28@gmail.com) →
+   подтвердите по ссылке из письма. (Домен не нужен — достаточно одного подтверждённого отправителя.)
+3. **SMTP & API → SMTP**: возьмите параметры:
+   - Host `smtp-relay.brevo.com`, Port `587`
+   - Login — показанный там e-mail/логин; Password — **Generate a new SMTP key**.
+4. Supabase → **Authentication → Emails → SMTP settings → Enable Custom SMTP**:
+   - Sender email — ваш подтверждённый отправитель; Sender name — `boulder-coach`.
+   - Host `smtp-relay.brevo.com`, Port `587`, Username — логин Brevo, Password — SMTP-ключ.
+5. Supabase → **Authentication → Rate Limits** → поднимите лимит «emails per hour» (по умолчанию низкий),
+   т.к. теперь письма идут через нормальный SMTP.
+
+Альтернативы: Resend (100/сутки, 3000/мес — но для «from вашего домена» нужен домен),
+SendGrid (100/сутки), Amazon SES (дёшево и масштабируемо, чуть сложнее настройка).
+
+## 6d. 🗑 Edge Function `delete-user` (удаление людей админом)
+Чтобы на вкладке «Пользователи» работала кнопка **«Удалить»** (тренер уволился /
+спортсмен перестал ходить): разверните функцию так же, как `invite-coach` —
+Dashboard → **Edge Functions → Create function** → имя `delete-user` → вставьте код из
+`supabase/functions/delete-user/index.ts` → **Deploy**. Удаление каскадно убирает профиль
+и все связанные данные (визиты, абонементы, связи). Действие необратимо.
+
+## 6e. 🅿️ Фаза 2 — применить миграцию трасс
+Чтобы заработала вкладка **«Трассы»** (каталог + статистика по грейдам), примените
+`supabase/migrations/0005_phase2_routes.sql` (SQL Editor или `supabase db push`).
 
 ## 7. ⛳️ Хостинг фронтенда — Cloudflare Pages
 1. Запушьте репозиторий на GitHub (см. ниже «Git»).
@@ -108,5 +138,6 @@ Trigger или GitHub Actions cron → аутентифицированный л
 |---|---|---|
 | `VITE_SUPABASE_URL` | фронт | `frontend/.env`, переменные Cloudflare Pages |
 | `VITE_SUPABASE_ANON_KEY` | фронт | `frontend/.env`, переменные Cloudflare Pages |
-| `service_role key` | Edge Functions (create-coach, purge-photos) | `supabase secrets set` (НИКОГДА в гит) |
+| `service_role key` | Edge Functions (invite-coach, delete-user, purge-photos) | Supabase **сам** пробрасывает в Edge Functions как `SUPABASE_SERVICE_ROLE_KEY` — вручную задавать НЕ нужно; в гит НИКОГДА |
+| SMTP-ключ (Brevo) | Auth → SMTP | Supabase Dashboard (см. 6c) |
 | Google Client ID/Secret | Supabase Auth | Supabase Dashboard |

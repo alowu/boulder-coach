@@ -8,6 +8,7 @@ import { Login, Register, ResetPassword, SetPassword } from './features/auth/Aut
 import { MyQr, MyCalendar, MyStatsScreen } from './features/athlete/Athlete'
 import { Scan, Athletes, AthleteDetail, CoachSettings, CoachStats } from './features/coach/Coach'
 import { AdminUsers, AdminCoaches, AdminOverview } from './features/admin/Admin'
+import { RoutesCatalog } from './features/routes/Routes'
 
 function ProtectedLayout() {
   const { session, loading } = useAuth()
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/athletes/:athleteId" element={<RoleGate allow={['coach', 'admin']}><AthleteDetail /></RoleGate>} />
         <Route path="/settings" element={<RoleGate allow={['coach']}><CoachSettings /></RoleGate>} />
         <Route path="/coach-stats" element={<RoleGate allow={['coach']}><CoachStats /></RoleGate>} />
+        <Route path="/routes" element={<RoleGate allow={['coach', 'admin']}><RoutesCatalog /></RoleGate>} />
         <Route path="/admin/overview" element={<RoleGate allow={['admin']}><AdminOverview /></RoleGate>} />
         <Route path="/admin/users" element={<RoleGate allow={['admin']}><AdminUsers /></RoleGate>} />
         <Route path="/admin/coaches" element={<RoleGate allow={['admin']}><AdminCoaches /></RoleGate>} />

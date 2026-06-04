@@ -40,3 +40,25 @@ export interface MyStats {
   first_visit: string | null
   last_visit: string | null
 }
+
+// ── Фаза 2: трассы ──────────────────────────────────────────────────────────
+export type RouteStatus = 'top' | 'flash' | 'attempt'
+
+export interface Route {
+  id: string
+  wall_color: string | null
+  grade_french: string | null
+  hold_color: string | null
+  plane: string // '1'..'12' | 'cave'
+  is_active: boolean
+  created_at?: string
+}
+
+export interface RouteLog {
+  id: string
+  visit_id: string
+  route_id: string
+  athlete_id: string
+  status: RouteStatus
+  created_at: string
+}
