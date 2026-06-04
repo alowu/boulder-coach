@@ -25,12 +25,21 @@ Dashboard → **Authentication → Hooks → Customize Access Token (JWT) Claims
 выберите функцию `public.custom_access_token_hook`. Без этого роль будет
 определяться запасным путём (через `profiles`), что медленнее, но рабоче.
 
-## 4. ⛳️ Настроить провайдеры входа
-- **Email/Password:** Authentication → Providers → Email → включить;
+## 4. Настроить провайдеры входа
+- **⛳️ Email/Password (обязательно):** Authentication → Providers → Email → включить;
   **выключить** «Confirm email» (SPEC 4.1.2 — подтверждение не требуется).
-- **Google OAuth:** Authentication → Providers → Google → включить, вставить
-  Client ID / Client Secret из Google Cloud Console (OAuth consent + credentials).
-  В Google добавьте redirect URL вида `https://<ref>.supabase.co/auth/v1/callback`.
+  Этого **достаточно**, чтобы приложение полностью работало.
+- **💤 Google OAuth (опционально — можно пропустить):** это всего лишь кнопка
+  «Войти через Google». Для запуска она **не нужна** и добавляется когда угодно позже.
+  Если когда-нибудь захотите включить:
+  1. Откройте https://console.cloud.google.com — это «Google Cloud Console», бесплатная
+     панель Google для приложений, которым нужен вход через Google (вход вашим Google-аккаунтом).
+  2. Создайте проект → **APIs & Services** → **OAuth consent screen** (заполните название/почту)
+     → **Credentials** → **Create credentials** → **OAuth client ID** → тип **Web application**.
+  3. Скопируйте **Client ID** и **Client Secret**.
+  4. В поле **Authorized redirect URIs** добавьте: `https://<ref>.supabase.co/auth/v1/callback`
+     (`<ref>` — идентификатор вашего проекта Supabase из его URL).
+  5. В Supabase: Authentication → Providers → Google → включить, вставить Client ID / Secret.
 - Настройте **Site URL** и **Redirect URLs** на адрес фронта (см. шаг 7).
 
 ## 5. ⛳️ Создать первого администратора
