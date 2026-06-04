@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { setRole } from '../../lib/api'
-import type { Role } from '../../lib/types'
+import type { Role, Visit } from '../../lib/types'
+import { aggregateVisits, type VisitStats } from '../../lib/stats'
+import { StatCards } from '../../components/StatCards'
+import { VisitList } from '../../components/VisitList'
 import { Badge, Button, Card, ErrorText, Input, Label, PageTitle, Select, Spinner } from '../../components/ui'
 
 interface UserRow { id: string; email: string | null; display_name: string | null; role: Role }
@@ -112,6 +115,49 @@ export function AdminCoaches() {
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+// ── Обзор зала (админ видит всё, SPEC 4.7.3) ────────────────────────────────
+export function AdminOverview() {
+  const [stats, setStats] = useState<VisitStats | null>(null)
+  const [counts, setCounts] = useState({ admin: 0, coach: 0, athlete: 0 })
+  const [recent, setRecent] = useState<Visit[]>([])
+  const [names, setNames] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    ;(async () => {
+      const [{ data: vis }, { data: profs }] = await Promise.all([
+        supabase.from('v_visits').select('*').order('started_at', { ascending: false }),
+        supabase.from('profiles').select('id,display_name,role'),
+      ])
+      const rows = (vis as Visit[]) ?? []
+      setStats(aggregateVisits(rows))
+      setRecent(rows.slice(0, 15))
+      const rc = { admin: 0, coach: 0, athlete: 0 }
+      const m: Record<string, string> = {}
+      for (const p of profs ?? []) {
+        rc[(p.role as Role)] += 1
+        m[p.id] = p.display_name ?? '—'
+      }
+      setCounts(rc); setNames(m); setLoading(false)
+    })()
+  }, [])
+
+  if (loading) return <Spinner />
+  return (
+    <div>
+      <PageTitle>Обзор зала</PageTitle>
+      <div className="mb-3 grid grid-cols-3 gap-3">
+        <Card><div className="text-2xl font-semibold">{counts.athlete}</div><div className="text-sm text-slate-500">Спортсменов</div></Card>
+        <Card><div className="text-2xl font-semibold">{counts.coach}</div><div className="text-sm text-slate-500">Тренеров</div></Card>
+        <Card><div className="text-2xl font-semibold">{counts.admin}</div><div className="text-sm text-slate-500">Админов</div></Card>
+      </div>
+      {stats && <StatCards s={stats} showAthletes />}
+      <h2 className="mb-2 mt-5 font-semibold">Недавние тренировки</h2>
+      <VisitList visits={recent} names={names} coachNames={names} />
     </div>
   )
 }

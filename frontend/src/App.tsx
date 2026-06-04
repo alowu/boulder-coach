@@ -6,8 +6,8 @@ import { Spinner } from './components/ui'
 import type { Role } from './lib/types'
 import { Login, Register, ResetPassword, SetPassword } from './features/auth/AuthScreens'
 import { MyQr, MyCalendar, MyStatsScreen } from './features/athlete/Athlete'
-import { Scan, Athletes, AthleteDetail, CoachSettings } from './features/coach/Coach'
-import { AdminUsers, AdminCoaches } from './features/admin/Admin'
+import { Scan, Athletes, AthleteDetail, CoachSettings, CoachStats } from './features/coach/Coach'
+import { AdminUsers, AdminCoaches, AdminOverview } from './features/admin/Admin'
 
 function ProtectedLayout() {
   const { session, loading } = useAuth()
@@ -33,7 +33,7 @@ function HomeRedirect() {
   if (loading) return <Spinner />
   if (role === 'athlete') return <Navigate to="/qr" replace />
   if (role === 'coach') return <Navigate to="/scan" replace />
-  if (role === 'admin') return <Navigate to="/admin/users" replace />
+  if (role === 'admin') return <Navigate to="/admin/overview" replace />
   return <div className="p-8 text-center text-slate-500">Роль не назначена. Обратитесь к администратору.</div>
 }
 
@@ -54,6 +54,8 @@ export default function App() {
         <Route path="/athletes" element={<RoleGate allow={['coach', 'admin']}><Athletes /></RoleGate>} />
         <Route path="/athletes/:athleteId" element={<RoleGate allow={['coach', 'admin']}><AthleteDetail /></RoleGate>} />
         <Route path="/settings" element={<RoleGate allow={['coach']}><CoachSettings /></RoleGate>} />
+        <Route path="/coach-stats" element={<RoleGate allow={['coach']}><CoachStats /></RoleGate>} />
+        <Route path="/admin/overview" element={<RoleGate allow={['admin']}><AdminOverview /></RoleGate>} />
         <Route path="/admin/users" element={<RoleGate allow={['admin']}><AdminUsers /></RoleGate>} />
         <Route path="/admin/coaches" element={<RoleGate allow={['admin']}><AdminCoaches /></RoleGate>} />
       </Route>

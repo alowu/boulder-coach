@@ -7,6 +7,9 @@ import { checkin, resolveQr, grantMembership, endSession, coachDue } from '../..
 import { parseQrToken } from '../../lib/qr'
 import type { Visit, VisitType } from '../../lib/types'
 import { formatDate, formatDuration } from '../../lib/format'
+import { aggregateVisits, type VisitStats } from '../../lib/stats'
+import { StatCards } from '../../components/StatCards'
+import { VisitList } from '../../components/VisitList'
 import { Badge, Button, Card, ErrorText, Input, Label, PageTitle, Select, Spinner } from '../../components/ui'
 
 // ── Сканирование + чек-ин ───────────────────────────────────────────────
@@ -287,6 +290,44 @@ export function CoachSettings() {
         <Button onClick={() => void save()}>Сохранить</Button>
         {saved && <p className="text-sm text-green-700">Сохранено.</p>}
       </Card>
+    </div>
+  )
+}
+
+// ── Статистика тренера (агрегаты по своим спортсменам, SPEC 4.7.2) ──────────
+export function CoachStats() {
+  const { userId } = useAuth()
+  const [stats, setStats] = useState<VisitStats | null>(null)
+  const [recent, setRecent] = useState<Visit[]>([])
+  const [names, setNames] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!userId) return
+    ;(async () => {
+      const { data } = await supabase.from('v_visits').select('*')
+        .eq('coach_id', userId).order('started_at', { ascending: false })
+      const rows = (data as Visit[]) ?? []
+      setStats(aggregateVisits(rows))
+      setRecent(rows.slice(0, 15))
+      const ids = [...new Set(rows.map((r) => r.athlete_id))]
+      if (ids.length) {
+        const { data: profs } = await supabase.from('profiles').select('id,display_name').in('id', ids)
+        const m: Record<string, string> = {}
+        for (const p of profs ?? []) m[p.id] = p.display_name ?? '—'
+        setNames(m)
+      }
+      setLoading(false)
+    })()
+  }, [userId])
+
+  if (loading) return <Spinner />
+  return (
+    <div>
+      <PageTitle>Статистика</PageTitle>
+      {stats && <StatCards s={stats} showAthletes />}
+      <h2 className="mb-2 mt-5 font-semibold">Недавние тренировки</h2>
+      <VisitList visits={recent} names={names} />
     </div>
   )
 }
