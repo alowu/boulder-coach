@@ -69,30 +69,38 @@ export function Register() {
   const [password, setPassword] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setErr(''); setBusy(true)
     const { data, error } = await supabase.auth.signUp({
       email, password,
-      options: { data: { full_name: name } },
+      options: { data: { full_name: name }, emailRedirectTo: window.location.origin },
     })
     setBusy(false)
     if (error) { setErr(error.message); return }
-    // Confirm email выключен → сессия сразу активна. Если нет — просим войти.
+    // Если подтверждение e-mail включено — сессии нет, просим проверить почту.
     if (data.session) nav('/', { replace: true })
-    else nav('/login', { replace: true })
+    else setSent(true)
   }
 
   return (
     <Shell title="Регистрация спортсмена">
-      <form onSubmit={submit} className="space-y-3">
-        <div><Label>Имя</Label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
-        <div><Label>E-mail</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
-        <div><Label>Пароль</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required /></div>
-        <Button type="submit" className="w-full" disabled={busy}>Зарегистрироваться</Button>
-        <ErrorText>{err}</ErrorText>
-      </form>
+      {sent ? (
+        <p className="text-sm text-slate-600">
+          Мы отправили ссылку для подтверждения на <b>{email}</b>. Перейдите по ней,
+          затем войдите. Если письма нет — проверьте папку «Спам» и правильность адреса.
+        </p>
+      ) : (
+        <form onSubmit={submit} className="space-y-3">
+          <div><Label>Имя</Label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
+          <div><Label>E-mail</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
+          <div><Label>Пароль</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required /></div>
+          <Button type="submit" className="w-full" disabled={busy}>Зарегистрироваться</Button>
+          <ErrorText>{err}</ErrorText>
+        </form>
+      )}
       <div className="mt-4 text-sm">
         <Link to="/login" className="text-sky-600">Уже есть аккаунт? Войти</Link>
       </div>
