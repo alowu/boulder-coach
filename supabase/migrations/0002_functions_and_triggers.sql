@@ -5,7 +5,7 @@
 --   #3  создание coach_settings при назначении роли coach;
 --   #4  транзакционное начисление абонемента (RPC);
 --   #15 идемпотентное завершение сессии (только при ended_at IS NULL).
--- Константа SESSION_AUTO_END = interval '2 hours' (SPEC §10).
+-- Константа SESSION_AUTO_END = interval '2 hours' (SPEC §9).
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -208,7 +208,7 @@ declare
 begin
   if v_coach is null then raise exception 'AUTH_REQUIRED'; end if;
   if v_role <> 'coach' then raise exception 'FORBIDDEN_ONLY_COACH'; end if;
-  if p_n is null or p_n < 1 or p_n > 100 then         -- GRANT_MAX = 100 (SPEC §10)
+  if p_n is null or p_n < 1 or p_n > 100 then         -- GRANT_MAX = 100 (SPEC §9)
     raise exception 'INVALID_GRANT_N';
   end if;
   if not public.has_active_link(v_coach, p_athlete) then

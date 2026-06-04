@@ -1,7 +1,7 @@
 -- ============================================================================
 -- boulder-coach — Migration 0001: схема MVP (PostgreSQL / Supabase)
 -- Реализует раздел 5 SPEC.md (MVP). Сущности Фазы 2 — в 0005_phase2_routes.sql.
--- Именованные константы (SPEC §10): SESSION_AUTO_END = 2 часа.
+-- Именованные константы (SPEC §9): SESSION_AUTO_END = 2 часа.
 -- ============================================================================
 
 create extension if not exists pgcrypto;   -- gen_random_uuid()
