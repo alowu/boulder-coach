@@ -66,6 +66,22 @@ npm run dev          # откроется http://localhost:5173
 ```
 `.env` с `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` уже создан. Теперь можно регистрироваться.
 
+## 6b. 💤 Инвайты тренеров по e-mail (опционально)
+Чтобы на вкладке «Тренеры» работала кнопка **«Пригласить»** (письмо-приглашение):
+1. **Примените миграцию `0006_invite_fixes.sql`** (SQL Editor или `supabase db push`) — она
+   добавляет безопасный серверный путь смены роли и закрывает эскалацию через e-mail.
+2. **Разверните Edge Function `invite-coach`** одним из способов:
+   - Дашборд: Supabase → **Edge Functions → Create function** → имя `invite-coach` →
+     вставьте код из `supabase/functions/invite-coach/index.ts` → **Deploy**.
+   - Или CLI: `supabase functions deploy invite-coach`.
+   `SUPABASE_URL` и `SUPABASE_SERVICE_ROLE_KEY` Supabase пробрасывает в функцию автоматически —
+   секреты вручную задавать не нужно.
+3. Убедитесь, что в URL Configuration добавлен redirect `https://boulder-coach.pages.dev/**`
+   (письмо-инвайт ведёт на `/set-password`).
+> Без этого шага тренеров всё равно можно добавлять: пользователь регистрируется сам →
+> вы меняете ему роль на вкладке «Пользователи». Письма Supabase на free-tier лимитированы
+> (несколько в час) — для своего SMTP настройте Auth → SMTP.
+
 ## 7. ⛳️ Хостинг фронтенда — Cloudflare Pages
 1. Запушьте репозиторий на GitHub (см. ниже «Git»).
 2. Cloudflare Dashboard → **Workers & Pages → Create → Pages → Connect to Git**.

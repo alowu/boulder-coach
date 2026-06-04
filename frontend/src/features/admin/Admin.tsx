@@ -63,12 +63,19 @@ export function AdminCoaches() {
   const [msg, setMsg] = useState('')
   const [ok, setOk] = useState('')
 
-  async function promote() {
+  async function invite() {
     setMsg(''); setOk('')
-    const { data } = await supabase.from('profiles').select('id').eq('email', email.trim()).maybeSingle()
-    if (!data) { setMsg('Пользователь с таким e-mail не найден. Сначала он должен зарегистрироваться.'); return }
-    try { await setRole(data.id as string, 'coach'); setOk('Назначен тренером.'); setEmail(''); await reload() }
-    catch (e) { setMsg((e as Error).message) }
+    const addr = email.trim()
+    if (!addr) return
+    const { data, error } = await supabase.functions.invoke('invite-coach', { body: { email: addr } })
+    if (error) {
+      setMsg('Не удалось пригласить. Убедитесь, что Edge Function «invite-coach» развёрнута в Supabase. ' + (error.message ?? ''))
+      return
+    }
+    if (data?.status === 'invited') setOk(`Приглашение отправлено на ${addr}.`)
+    else if (data?.status === 'promoted') setOk('Пользователь уже зарегистрирован — назначен тренером.')
+    else setOk('Готово.')
+    setEmail(''); await reload()
   }
 
   if (loading) return <Spinner />
@@ -77,13 +84,14 @@ export function AdminCoaches() {
     <div>
       <PageTitle>Тренеры</PageTitle>
       <Card className="mb-4">
-        <Label>Назначить тренером по e-mail</Label>
+        <Label>Пригласить тренера по e-mail</Label>
         <p className="mb-2 text-xs text-slate-400">
-          Тренер сначала регистрируется как обычный пользователь, затем вы назначаете ему роль здесь.
+          На указанный e-mail придёт приглашение. По ссылке тренер задаёт пароль и сразу входит как тренер.
+          Если e-mail уже зарегистрирован — он будет назначен тренером без письма.
         </p>
         <div className="flex gap-2">
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="coach@example.com" />
-          <Button onClick={() => void promote()}>Назначить</Button>
+          <Button onClick={() => void invite()}>Пригласить</Button>
         </div>
         <ErrorText>{msg}</ErrorText>
         {ok && <p className="mt-2 text-sm text-green-700">{ok}</p>}

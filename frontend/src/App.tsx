@@ -4,7 +4,7 @@ import { Layout } from './components/Layout'
 import { PaymentReminder } from './components/PaymentReminder'
 import { Spinner } from './components/ui'
 import type { Role } from './lib/types'
-import { Login, Register, ResetPassword } from './features/auth/AuthScreens'
+import { Login, Register, ResetPassword, SetPassword } from './features/auth/AuthScreens'
 import { MyQr, MyCalendar, MyStatsScreen } from './features/athlete/Athlete'
 import { Scan, Athletes, AthleteDetail, CoachSettings } from './features/coach/Coach'
 import { AdminUsers, AdminCoaches } from './features/admin/Admin'
@@ -43,6 +43,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/reset" element={<ResetPassword />} />
+      <Route path="/set-password" element={<SetPassword />} />
 
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<HomeRedirect />} />

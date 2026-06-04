@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../auth/auth'
 import { Button, Card, ErrorText, Input, Label } from '../../components/ui'
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
@@ -124,6 +125,47 @@ export function ResetPassword() {
         </form>
       )}
       <div className="mt-4 text-sm"><Link to="/login" className="text-sky-600">Назад ко входу</Link></div>
+    </Shell>
+  )
+}
+
+// Приём приглашения / сброса: пользователь приходит по ссылке из письма (сессия
+// уже создана из токена в URL), здесь он задаёт пароль.
+export function SetPassword() {
+  const { session, loading } = useAuth()
+  const nav = useNavigate()
+  const [pw, setPw] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setErr(''); setBusy(true)
+    const { error } = await supabase.auth.updateUser({ password: pw })
+    setBusy(false)
+    if (error) setErr(error.message)
+    else nav('/', { replace: true })
+  }
+
+  if (loading) return <Shell title="Задание пароля"><p className="text-sm text-slate-500">Загрузка…</p></Shell>
+  if (!session) {
+    return (
+      <Shell title="Ссылка недействительна">
+        <p className="text-sm text-slate-600">
+          Ссылка-приглашение недействительна или истекла. Попросите администратора прислать новое.
+        </p>
+        <div className="mt-4 text-sm"><Link to="/login" className="text-sky-600">Ко входу</Link></div>
+      </Shell>
+    )
+  }
+  return (
+    <Shell title="Задайте пароль">
+      <p className="mb-3 text-sm text-slate-500">Вы приняли приглашение. Задайте пароль для входа.</p>
+      <form onSubmit={submit} className="space-y-3">
+        <div><Label>Новый пароль</Label><Input type="password" value={pw} onChange={(e) => setPw(e.target.value)} minLength={6} required /></div>
+        <Button type="submit" className="w-full" disabled={busy}>Сохранить и войти</Button>
+        <ErrorText>{err}</ErrorText>
+      </form>
     </Shell>
   )
 }
