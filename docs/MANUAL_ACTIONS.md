@@ -48,13 +48,23 @@ Dashboard → **Authentication → Hooks → Customize Access Token (JWT) Claims
    `REPLACE_WITH_ADMIN_EMAIL`. Это повысит аккаунт до `admin`.
 
 ## 6. ⛳️ Создание тренеров (после входа админом)
-Тренеры **не регистрируются сами**. Админ создаёт их через приложение
-(экран «Тренеры») — фронт вызывает Edge Function `create-coach` (service_role:
-`auth.admin.createUser` + установка роли `coach`). Сгенерированный пароль
-показывается админу один раз. Строка `coach_settings` создаётся автоматически
-триггером.
-> Edge Function `create-coach` нужно задеплоить: `supabase functions deploy create-coach`
-> и задать секрет `SUPABASE_SERVICE_ROLE_KEY` (`supabase secrets set ...`).
+**Поток MVP (работает сразу, без Edge Function):**
+1. Будущий тренер **регистрируется** в приложении как обычный пользователь (по e-mail/паролю).
+2. Вы (админ) на экране **«Тренеры»** вводите его e-mail → «Назначить» (или меняете роль на
+   вкладке **«Пользователи»**). Роль становится `coach`, строка `coach_settings` создаётся
+   автоматически триггером.
+
+> 💤 Опционально на будущее: чтобы админ заводил тренеров с авто-сгенерированным паролем
+> (как в SPEC 4.1.3), задеплойте Edge Function `create-coach` (service_role:
+> `auth.admin.createUser` + `app_set_role`). Для MVP это не требуется.
+
+## 6a. ▶️ Запустить приложение
+```bash
+cd frontend
+npm install          # один раз
+npm run dev          # откроется http://localhost:5173
+```
+`.env` с `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` уже создан. Теперь можно регистрироваться.
 
 ## 7. ⛳️ Хостинг фронтенда — Cloudflare Pages
 1. Запушьте репозиторий на GitHub (см. ниже «Git»).
