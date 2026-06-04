@@ -4,11 +4,10 @@ import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser'
 import { useAuth } from '../../auth/auth'
 import { supabase } from '../../lib/supabase'
 import { checkin, resolveQr, grantMembership, endSession, coachDue } from '../../lib/api'
+import { parseQrToken } from '../../lib/qr'
 import type { Visit, VisitType } from '../../lib/types'
 import { formatDate, formatDuration } from '../../lib/format'
 import { Badge, Button, Card, ErrorText, Input, Label, PageTitle, Select, Spinner } from '../../components/ui'
-
-const UUID_RE = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/
 
 // ── Сканирование + чек-ин ───────────────────────────────────────────────
 export function Scan() {
@@ -37,7 +36,7 @@ export function Scan() {
   }
 
   async function handleText(text: string) {
-    const token = text.match(UUID_RE)?.[0] ?? null
+    const token = parseQrToken(text)
     if (!token) { setMsg('QR не распознан'); return }
     stop()
     try {
