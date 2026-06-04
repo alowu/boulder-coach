@@ -83,8 +83,10 @@ create policy routes_write  on public.routes for all
 create policy color_map_select on public.color_grade_map for select using (auth.uid() is not null);
 
 -- route_logs: спортсмен — свои; тренер — через активную связь; admin — все
+-- тренер видит лог только по СВОИМ тренировкам (route_logs не имеет coach_id — гейтим через визит)
 create policy route_logs_select on public.route_logs for select using (
-  public.is_admin() or athlete_id = auth.uid() or public.has_active_link(auth.uid(), athlete_id)
+  public.is_admin() or athlete_id = auth.uid()
+  or exists (select 1 from public.visits v where v.id = route_logs.visit_id and v.coach_id = auth.uid())
 );
 create policy route_logs_insert_own on public.route_logs for insert
   with check (athlete_id = auth.uid());
@@ -95,7 +97,8 @@ create policy route_logs_delete_own on public.route_logs for delete
 
 -- route_photos: владелец — спортсмен; загружает/удаляет только он; тренер видит по связи
 create policy route_photos_select on public.route_photos for select using (
-  public.is_admin() or athlete_id = auth.uid() or public.has_active_link(auth.uid(), athlete_id)
+  public.is_admin() or athlete_id = auth.uid()
+  or exists (select 1 from public.visits v where v.id = route_photos.visit_id and v.coach_id = auth.uid())
 );
 create policy route_photos_insert_own on public.route_photos for insert
   with check (athlete_id = auth.uid());
@@ -116,6 +119,11 @@ begin
   where expires_at <= now()
   returning storage_path;
 end $$;
+
+-- Деструктивная функция: НЕ доступна обычным пользователям. Только service_role
+-- (Edge Function/pg_cron). Владелец (postgres) имеет execute неявно.
+revoke all on function public.purge_expired_photos() from public;
+grant execute on function public.purge_expired_photos() to service_role;
 
 -- Пример включения по расписанию (раскомментировать после создания Edge Function
 -- 'purge-photos', которая зовёт purge_expired_photos() и удаляет объекты Storage):

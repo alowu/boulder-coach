@@ -26,6 +26,8 @@ select
   public.visit_minutes(v.started_at, v.ended_at)    as duration_minutes
 from public.visits v;
 
+grant select on public.v_visits to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- Сумма к оплате спортсмену по каждому тренеру (SPEC 4.5.3/4.5.5).
 -- Только тренеры с show_payment_due=true и суммой > 0. Спортсмен НЕ читает
@@ -57,16 +59,18 @@ grant execute on function public.app_my_payment_due() to authenticated;
 create or replace function public.app_coach_due(p_athlete uuid)
 returns numeric
 language sql stable security definer set search_path = public as $$
-  select coalesce(count(*) * cs.price_per_visit, 0)
-  from public.coach_settings cs
-  left join public.visits v
-    on v.coach_id = cs.coach_id
-   and v.athlete_id = p_athlete
-   and v.visit_type = 'paid'
-   and v.payment_settled_at is null
-  where cs.coach_id = auth.uid()
-    and public.has_active_link(auth.uid(), p_athlete)
-  group by cs.price_per_visit;
+  select coalesce((
+    select count(v.id) * cs.price_per_visit            -- count(v.id): NULL-строка LEFT JOIN даёт 0
+    from public.coach_settings cs
+    left join public.visits v
+      on v.coach_id = cs.coach_id
+     and v.athlete_id = p_athlete
+     and v.visit_type = 'paid'
+     and v.payment_settled_at is null
+    where cs.coach_id = auth.uid()
+      and public.has_active_link(auth.uid(), p_athlete)
+    group by cs.price_per_visit
+  ), 0);                                                -- внешний coalesce: нет группы → 0
 $$;
 grant execute on function public.app_coach_due(uuid) to authenticated;
 

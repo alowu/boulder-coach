@@ -128,6 +128,7 @@ begin
   end if;
 
   -- 4.3.1.a/.b/.c — создать связь / реактивировать removed_at / no-op
+  perform set_config('app.coach_athlete_rpc', '1', true);   -- разрешить гарду реактивацию (transaction-local)
   insert into coach_athlete (coach_id, athlete_id)
   values (v_coach, p_athlete)
   on conflict (coach_id, athlete_id)
@@ -197,22 +198,33 @@ end $$;
 -- ===========================================================================
 create or replace function public.app_grant_membership(
   p_athlete uuid,
-  p_n integer
+  p_n integer,
+  p_coach uuid default null            -- тренер по умолчанию = вызывающий; админ указывает явно
 )
 returns integer
 language plpgsql security definer set search_path = public as $$
 declare
-  v_coach uuid := auth.uid();
+  v_uid   uuid := auth.uid();
   v_role  text := public.effective_role();
+  v_coach uuid;
   v_new   integer;
 begin
-  if v_coach is null then raise exception 'AUTH_REQUIRED'; end if;
-  if v_role <> 'coach' then raise exception 'FORBIDDEN_ONLY_COACH'; end if;
-  if p_n is null or p_n < 1 or p_n > 100 then         -- GRANT_MAX = 100 (SPEC §9)
+  if v_uid is null then raise exception 'AUTH_REQUIRED'; end if;
+  if v_role not in ('coach','admin') then raise exception 'FORBIDDEN_ONLY_COACH'; end if;
+  if p_n is null or p_n < 1 or p_n > 100 then           -- GRANT_MAX = 100 (SPEC §9)
     raise exception 'INVALID_GRANT_N';
   end if;
+
+  -- тренер начисляет СВОЕЙ паре; админ обязан указать тренера явно (SPEC §2.2/§6.2)
+  if v_role = 'admin' then
+    if p_coach is null then raise exception 'COACH_REQUIRED'; end if;
+    v_coach := p_coach;
+  else
+    v_coach := v_uid;
+  end if;
+
   if not public.has_active_link(v_coach, p_athlete) then
-    raise exception 'NO_ACTIVE_LINK';                 -- 4.4.4: мягко удалённой парой не управляют
+    raise exception 'NO_ACTIVE_LINK';                   -- 4.4.4: мягко удалённой парой не управляют
   end if;
 
   insert into memberships (coach_id, athlete_id, remaining_visits)
@@ -225,7 +237,7 @@ begin
    returning remaining_visits into v_new;
 
   insert into membership_ledger (coach_id, athlete_id, delta, reason, created_by)
-  values (v_coach, p_athlete, p_n, 'grant', v_coach);
+  values (v_coach, p_athlete, p_n, 'grant', v_uid);     -- created_by = кто выполнил
 
   return v_new;
 end $$;
@@ -315,14 +327,92 @@ begin
   update profiles set role = p_role where id = p_user;
 end $$;
 
+-- ===========================================================================
+-- RPC: ВИЗИТ ЗАДНИМ ЧИСЛОМ (SPEC 4.3.8). Только тренер своей паре. Создаётся
+-- сразу завершённым (is_backdated=true, end_reason='coach'); правило одной
+-- активной сессии не применяется (ended_at заполнен). Списание — по 4.4.2.
+-- ===========================================================================
+create or replace function public.app_backdate_visit(
+  p_athlete    uuid,
+  p_started    timestamptz,
+  p_ended      timestamptz,
+  p_visit_type public.visit_type
+)
+returns public.visits
+language plpgsql security definer set search_path = public as $$
+declare
+  v_coach     uuid := auth.uid();
+  v_role      text := public.effective_role();
+  v_visit     public.visits;
+  v_remaining int;
+begin
+  if v_coach is null then raise exception 'AUTH_REQUIRED'; end if;
+  if v_role <> 'coach' then raise exception 'FORBIDDEN_ONLY_COACH'; end if;
+  if p_started is null or p_ended is null then raise exception 'TIMES_REQUIRED'; end if;  -- 4.3.8.a
+  if p_ended < p_started then raise exception 'END_BEFORE_START'; end if;
+  if p_started > now() then raise exception 'NOT_IN_PAST'; end if;
+  if not exists (select 1 from profiles where id = p_athlete and role = 'athlete') then
+    raise exception 'ATHLETE_NOT_FOUND';
+  end if;
+
+  perform set_config('app.coach_athlete_rpc', '1', true);
+  insert into coach_athlete (coach_id, athlete_id)
+  values (v_coach, p_athlete)
+  on conflict (coach_id, athlete_id)
+    do update set removed_at = null
+    where coach_athlete.removed_at is not null;
+
+  insert into memberships (coach_id, athlete_id, remaining_visits)
+  values (v_coach, p_athlete, 0)
+  on conflict (coach_id, athlete_id) do nothing;
+
+  -- 4.3.8.b — создаётся сразу завершённым
+  insert into visits (coach_id, athlete_id, visit_type, started_at, ended_at, end_reason, is_backdated)
+  values (v_coach, p_athlete, p_visit_type, p_started, p_ended, 'coach', true)
+  returning * into v_visit;
+
+  if p_visit_type = 'membership' then
+    select remaining_visits into v_remaining
+      from memberships where coach_id = v_coach and athlete_id = p_athlete for update;
+    if coalesce(v_remaining, 0) > 0 then
+      update memberships set remaining_visits = greatest(0, remaining_visits - 1)
+        where coach_id = v_coach and athlete_id = p_athlete;
+      update visits set membership_decremented = true where id = v_visit.id;
+      v_visit.membership_decremented := true;
+      insert into membership_ledger (coach_id, athlete_id, delta, reason, visit_id, created_by)
+      values (v_coach, p_athlete, -1, 'visit_decrement', v_visit.id, v_coach);
+    end if;
+  end if;
+
+  return v_visit;
+end $$;
+
+-- ===========================================================================
+-- RPC: РЕЗОЛВ QR-ТОКЕНА → athlete_id (SPEC 4.2.3/6.2). Только coach/admin.
+-- Возвращает NULL для неизвестного/не-athlete токена (клиент покажет нейтральное
+-- «QR не распознан» — анти-энумерация 4.2.3.1). PII не раскрывается.
+-- ===========================================================================
+create or replace function public.app_resolve_qr(p_token uuid)
+returns uuid
+language plpgsql stable security definer set search_path = public as $$
+declare v_id uuid;
+begin
+  if public.effective_role() not in ('coach','admin') then raise exception 'FORBIDDEN'; end if;
+  select id into v_id from public.profiles
+   where athlete_qr_token = p_token and role = 'athlete';
+  return v_id;   -- NULL если не найдено / не athlete
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Доступ к RPC для аутентифицированных пользователей (RLS внутри функций).
 -- ---------------------------------------------------------------------------
 grant execute on function public.app_checkin(uuid, public.visit_type)        to authenticated;
-grant execute on function public.app_grant_membership(uuid, integer)         to authenticated;
+grant execute on function public.app_grant_membership(uuid, integer, uuid)   to authenticated;
 grant execute on function public.app_end_session(uuid)                       to authenticated;
 grant execute on function public.app_dismiss_payment(uuid)                   to authenticated;
 grant execute on function public.app_set_role(uuid, public.user_role)        to authenticated;
+grant execute on function public.app_resolve_qr(uuid)                        to authenticated;
+grant execute on function public.app_backdate_visit(uuid, timestamptz, timestamptz, public.visit_type) to authenticated;
 grant execute on function public.effective_role()                            to authenticated;
 grant execute on function public.is_admin()                                  to authenticated;
 grant execute on function public.is_coach()                                  to authenticated;

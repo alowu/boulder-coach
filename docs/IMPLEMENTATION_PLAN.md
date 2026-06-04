@@ -235,7 +235,7 @@ return () => controls.stop()
 ### Task 3.2: Чек-ин с обработкой ошибок
 **Files:** `src/features/coach/{Scan,CheckinDialog}.tsx`, `src/api/checkin.ts`
 
-- [ ] Резолв токена → найти спортсмена и его `display_name`. Реализация резолва: RPC/`select id,display_name from profiles where athlete_qr_token=:token` (RLS позволит после диалога; для надёжности — отдельная SECURITY DEFINER RPC `app_resolve_qr(token)` возвращающая `{athlete_id, name}` только для coach/admin — **добавить в миграцию 0006 при реализации**).
+- [ ] Резолв токена через RPC **`app_resolve_qr(token)`** (уже есть в `0002`): возвращает `athlete_id` (или NULL) только для coach/admin. По `athlete_id` подтянуть `display_name` из `profiles` (RLS даст доступ после первого скана/связи).
 - [ ] CheckinDialog: выбор типа визита (по абонементу / разовый) → RPC `app_checkin(athleteId, visitType)`.
 - [ ] **Обработка ошибок (4.2.3, §10):** невалидный/чужой/не-athlete токен → «QR не распознан» (нейтрально); если RPC вернул существующую активную сессию → «тренировка уже идёт»; сетевая ошибка → тост + повтор.
 - [ ] **Commit** — `feat(coach): scan→checkin flow with error handling`
@@ -254,7 +254,7 @@ return () => controls.stop()
 ### Task 3.4: Визит задним числом
 **Files:** `src/features/coach/BackdateVisit.tsx`
 
-- [ ] Форма: спортсмен (из своего списка или скан), `started_at` (в прошлом) + `ended_at`/длительность, тип визита. Валидация обязательности обоих полей. **Backend:** для backdated нужен вариант RPC `app_backdate_visit(athlete, started_at, ended_at, visit_type)` (создаёт завершённый визит, `is_backdated=true`, `end_reason='coach'`, списание по правилам) — **добавить в миграцию 0006 при реализации** (по образцу `app_checkin`, без правила одной активной сессии, с явными метками времени).
+- [ ] Форма: спортсмен (из своего списка или скан), `started_at` (в прошлом) + `ended_at`/длительность, тип визита. Валидация обязательности обоих полей. **Backend:** RPC **`app_backdate_visit(athlete, started_at, ended_at, visit_type)`** уже есть в `0002` (создаёт завершённый визит `is_backdated=true`, `end_reason='coach'`, списание по правилам, без правила одной активной сессии).
 - [ ] **Commit** — `feat(coach): backdated visit`
 
 **Acceptance (4.3.8, §10):** при отсутствии `started_at`/`ended_at` операция отклоняется; визит создаётся завершённым.
@@ -333,7 +333,7 @@ const { email } = await req.json()
 - §5/5.A модель данных — миграции 0001/0005. ✔
 - §7 RLS — миграция 0003 + тесты T1. ✔
 - §10 критерии приёмки — отражены в «Acceptance» задач и тестах T1. ✔
-- Backend-гэпы, выявленные планом: `app_resolve_qr` (3.2) и `app_backdate_visit` (3.4) — добавить в миграцию **0006** при реализации (отмечено в задачах).
+- Backend полностью покрыт миграциями `0001–0004` (MVP): RPC `app_checkin`, `app_grant_membership`, `app_end_session`, `app_dismiss_payment`, `app_set_role`, `app_resolve_qr`, `app_backdate_visit`; функции `app_my_payment_due`, `app_coach_due`, `app_my_stats`, `visit_minutes`; представление `v_visits`. Отдельная миграция 0006 не требуется.
 
 ---
 

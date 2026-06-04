@@ -13,8 +13,11 @@
 grant usage on schema public to authenticated, anon;
 grant select, insert, update, delete on
   public.profiles, public.coach_settings, public.coach_athlete,
-  public.memberships, public.visits, public.membership_ledger, public.notifications
+  public.memberships, public.visits, public.membership_ledger
   to authenticated;
+-- notifications: клиент только читает свои и закрывает (dismiss). INSERT/DELETE — не нужны
+-- (payment_reminder вычисляется из visits; материализация — через SECURITY DEFINER при необходимости).
+grant select, update on public.notifications to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Включить RLS
@@ -92,13 +95,38 @@ create policy coach_athlete_soft_delete on public.coach_athlete for update
   using (coach_id = auth.uid() or public.is_admin())
   with check (coach_id = auth.uid() or public.is_admin());
 
+-- Гард: прямой UPDATE может только выставлять removed_at (мягкое удаление).
+-- Реактивация (removed_at → NULL) и правка coach_id/athlete_id/created_at —
+-- только через RPC (app_checkin ставит transaction-local флаг app.coach_athlete_rpc).
+create or replace function public.guard_coach_athlete_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.is_admin() then return new; end if;
+  if coalesce(current_setting('app.coach_athlete_rpc', true), '') = '1' then
+    return new;                                  -- путь RPC (app_checkin) — разрешён
+  end if;
+  if new.coach_id   is distinct from old.coach_id
+     or new.athlete_id is distinct from old.athlete_id
+     or new.created_at is distinct from old.created_at then
+    raise exception 'COACH_ATHLETE_IMMUTABLE_FIELDS';
+  end if;
+  if old.removed_at is not null and new.removed_at is null then
+    raise exception 'COACH_ATHLETE_REACTIVATE_VIA_RPC_ONLY';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists coach_athlete_guard_update on public.coach_athlete;
+create trigger coach_athlete_guard_update before update on public.coach_athlete
+  for each row execute function public.guard_coach_athlete_update();
+
 -- ===========================================================================
 -- memberships — чтение; запись только через RPC.
 -- ===========================================================================
 create policy memberships_select on public.memberships for select using (
   public.is_admin()
   or athlete_id = auth.uid()                                   -- спортсмен: свои счётчики
-  or public.has_active_link(auth.uid(), athlete_id)            -- тренер: только активная пара
+  or (coach_id = auth.uid() and public.has_active_link(auth.uid(), athlete_id))  -- тренер: ТОЛЬКО своя активная пара
 );
 
 -- ===========================================================================
@@ -107,7 +135,7 @@ create policy memberships_select on public.memberships for select using (
 create policy visits_select on public.visits for select using (
   public.is_admin()
   or athlete_id = auth.uid()                                   -- спортсмен: свои визиты
-  or public.has_active_link(auth.uid(), athlete_id)            -- тренер: активная пара
+  or (coach_id = auth.uid() and public.has_active_link(auth.uid(), athlete_id))  -- тренер: ТОЛЬКО свои визиты с этим спортсменом
 );
 
 -- ===========================================================================
@@ -116,7 +144,7 @@ create policy visits_select on public.visits for select using (
 create policy ledger_select on public.membership_ledger for select using (
   public.is_admin()
   or athlete_id = auth.uid()
-  or public.has_active_link(auth.uid(), athlete_id)
+  or (coach_id = auth.uid() and public.has_active_link(auth.uid(), athlete_id))  -- тренер: ТОЛЬКО своя пара
 );
 
 -- ===========================================================================
