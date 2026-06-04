@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser'
 import { useAuth } from '../../auth/auth'
 import { supabase } from '../../lib/supabase'
-import { checkin, resolveQr, grantMembership, endSession, coachDue } from '../../lib/api'
+import { checkin, resolveQr, grantMembership, endSession, coachDue, backdateVisit } from '../../lib/api'
 import { parseQrToken } from '../../lib/qr'
 import type { Visit, VisitType } from '../../lib/types'
 import { formatDate, formatDuration } from '../../lib/format'
@@ -174,6 +174,11 @@ export function AthleteDetail() {
   const [grant, setGrant] = useState('1')
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState('')
+  const [bdOpen, setBdOpen] = useState(false)
+  const [bdStart, setBdStart] = useState('')
+  const [bdEnd, setBdEnd] = useState('')
+  const [bdType, setBdType] = useState<VisitType>('paid')
+  const [bdMsg, setBdMsg] = useState('')
 
   async function load() {
     if (!userId) return
@@ -204,6 +209,15 @@ export function AthleteDetail() {
       .eq('coach_id', userId).eq('athlete_id', athleteId)
     history.back()
   }
+  async function doBackdate() {
+    setBdMsg('')
+    if (!bdStart || !bdEnd) { setBdMsg('Укажите начало и конец'); return }
+    if (new Date(bdEnd) < new Date(bdStart)) { setBdMsg('Конец раньше начала'); return }
+    try {
+      await backdateVisit(athleteId, new Date(bdStart).toISOString(), new Date(bdEnd).toISOString(), bdType)
+      setBdOpen(false); setBdStart(''); setBdEnd(''); await load()
+    } catch (e) { setBdMsg((e as Error).message) }
+  }
 
   if (loading) return <Spinner />
   return (
@@ -223,6 +237,30 @@ export function AthleteDetail() {
         </div>
         <ErrorText>{msg}</ErrorText>
         <Button variant="danger" className="mt-3 w-full" onClick={() => void remove()}>Удалить из моего списка</Button>
+      </Card>
+
+      <Card className="mb-3">
+        {!bdOpen ? (
+          <Button variant="secondary" className="w-full" onClick={() => setBdOpen(true)}>
+            Добавить визит задним числом
+          </Button>
+        ) : (
+          <div className="space-y-2">
+            <div><Label>Начало</Label><Input type="datetime-local" value={bdStart} onChange={(e) => setBdStart(e.target.value)} /></div>
+            <div><Label>Конец</Label><Input type="datetime-local" value={bdEnd} onChange={(e) => setBdEnd(e.target.value)} /></div>
+            <div><Label>Тип</Label>
+              <Select value={bdType} onChange={(e) => setBdType(e.target.value as VisitType)}>
+                <option value="paid">разовый / платный</option>
+                <option value="membership">по абонементу</option>
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => void doBackdate()}>Добавить</Button>
+              <Button variant="ghost" onClick={() => { setBdOpen(false); setBdMsg('') }}>Отмена</Button>
+            </div>
+            <ErrorText>{bdMsg}</ErrorText>
+          </div>
+        )}
       </Card>
 
       <h2 className="mb-2 font-semibold">Посещения</h2>
