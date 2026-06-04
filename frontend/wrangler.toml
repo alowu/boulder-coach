@@ -1,0 +1,6 @@
+# Cloudflare Pages (direct upload). Деплой: `npm run deploy` (после `wrangler login`).
+# VITE_*-переменные вшиваются в dist при сборке из frontend/.env — в Cloudflare их
+# настраивать не нужно (это direct upload, а не сборка на стороне CF).
+name = "boulder-coach"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-10-01"
